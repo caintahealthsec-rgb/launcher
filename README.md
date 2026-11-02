@@ -1,1 +1,200 @@
-# launcher
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_blank">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <style>
+    :root {
+      --accent: #1a73e8;
+      --bg: #f4f6fb; --card: #ffffff; --text: #1f2330; --muted: #6b7280; --border: #e3e7ef;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #14161c; --card: #1e212b; --text: #eef0f6; --muted: #9aa1b2; --border: #2c303c; }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--text); padding-bottom: env(safe-area-inset-bottom); }
+    header { background: var(--accent); color: #fff; padding: 18px 16px 14px; padding-top: calc(18px + env(safe-area-inset-top)); }
+    header h1 { margin: 0; font-size: 1.3rem; }
+    header p { margin: 4px 0 0; opacity: .9; font-size: .9rem; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 12px 14px 28px; }
+    #search { width: 100%; padding: 12px 14px; font-size: 1rem; border-radius: 12px;
+              border: 1px solid var(--border); background: var(--card); color: var(--text); outline: none; }
+    #search:focus { border-color: var(--accent); }
+    #chips { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0; scrollbar-width: none; }
+    #chips::-webkit-scrollbar { display: none; }
+    .chip { flex: none; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border);
+            background: var(--card); color: var(--text); font-size: .9rem; cursor: pointer; }
+    .chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    .app { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px 10px;
+           text-align: center; cursor: pointer; min-height: 120px; display: flex; flex-direction: column;
+           align-items: center; justify-content: center; gap: 6px; }
+    .app:active { transform: scale(.97); }
+    .icon { font-size: 2rem; line-height: 1; height: 40px; display: flex; align-items: center; }
+    .icon img { width: 40px; height: 40px; object-fit: contain; border-radius: 8px; }
+    .name { font-weight: 600; font-size: .95rem; word-break: break-word; }
+    .desc { color: var(--muted); font-size: .78rem; }
+    #msg { text-align: center; color: var(--muted); padding: 40px 0; }
+    #tip { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center;
+           justify-content: center; padding: 20px; z-index: 10; }
+    #tip .box { background: var(--card); border-radius: 18px; padding: 22px; max-width: 360px; width: 100%; }
+    #tip h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    #tip p { margin: 0 0 16px; color: var(--muted); line-height: 1.45; }
+    #tip button { width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent);
+                  color: #fff; font-size: 1rem; cursor: pointer; }
+    .alink { background: none; border: 0; color: var(--muted); font-size: .85rem; padding: 14px; cursor: pointer; }
+    #admin { display: none; position: fixed; inset: 0; background: var(--bg); overflow: auto; z-index: 20; padding: 0 14px 60px; }
+    .abar { position: sticky; top: 0; background: var(--bg); padding: 12px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .abar button, .abtns button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
+    .abar .pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .arow { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; max-width: 640px; margin-left: auto; margin-right: auto; }
+    .arow input[type=text] { width: 100%; padding: 9px; margin-bottom: 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: .95rem; }
+    .abtns { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="title">Application Launcher</h1>
+    <p id="subtitle"></p>
+  </header>
+
+  <div class="wrap">
+    <input id="search" type="search" placeholder="Search apps…" autocomplete="off">
+    <div id="chips"></div>
+    <div id="grid"></div>
+    <div id="msg">Loading…</div>
+  </div>
+
+  <div class="wrap" style="text-align:center"><button id="adminBtn" class="alink">⚙ Admin</button></div>
+  <div id="admin">
+    <div class="abar"><b>Manage apps</b><span><button id="aAdd">＋ Add</button> <button id="aSave" class="pri">Save</button> <button id="aClose">Close</button></span></div>
+    <div id="adminList"></div>
+  </div>
+
+  <div id="tip">
+    <div class="box">
+      <h2>💡 TIP</h2>
+      <p id="tipText"></p>
+      <button id="tipOk">Got it</button>
+    </div>
+  </div>
+
+  <script>
+    let APPS = [], category = '', query = '';
+
+    // Paste your Apps Script Web app URL (ends in /exec) here:
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxLdwGVHBm2zyDhyeK0fJcKmt1I6z7RxaEzVXABQV-_PuQLiWYa7VmXmVpZdV1-EbeKkw/exec';
+
+    fetch(API_URL + '?format=json')
+      .then(r => r.json())
+      .then(init)
+      .catch(e => { document.getElementById('msg').textContent = 'Error: ' + e.message; });
+
+    function init(data) {
+      const s = data.settings || {};
+      APPS = data.apps;
+      if (s['Theme Color']) document.documentElement.style.setProperty('--accent', s['Theme Color']);
+      document.getElementById('title').textContent = s.Title || 'Application Launcher';
+      document.getElementById('subtitle').textContent = s.Subtitle || '';
+      document.title = s.Title || 'Application Launcher';
+
+      const cats = [...new Set(APPS.map(a => a.category))];
+      const def = s['Default Category'];
+      category = cats.includes(def) ? def : 'All';
+      buildChips(cats);
+      render();
+
+      const showTip = String(s['Show TIP']).toUpperCase() !== 'FALSE';
+      if (showTip) {
+        document.getElementById('tipText').textContent = s['TIP Text'] ||
+          'This link also works in a PC/Desktop browser. Mac and Linux have not been tested yet.';
+        document.getElementById('tip').style.display = 'flex';
+      }
+    }
+
+    function buildChips(cats) {
+      const box = document.getElementById('chips');
+      box.innerHTML = '';
+      ['All', ...cats].forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'chip' + (c === category ? ' active' : '');
+        b.textContent = c;
+        b.onclick = () => { category = c; buildChips(cats); render(); };
+        box.appendChild(b);
+      });
+    }
+
+    function render() {
+      const grid = document.getElementById('grid');
+      const q = query.toLowerCase();
+      const list = APPS.filter(a =>
+        (category === 'All' || a.category === category) &&
+        (!q || (a.name + ' ' + a.description + ' ' + a.category).toLowerCase().includes(q)));
+      grid.innerHTML = '';
+      document.getElementById('msg').style.display = list.length ? 'none' : 'block';
+      document.getElementById('msg').textContent = 'No apps found.';
+      list.forEach(a => {
+        const d = document.createElement('div');
+        d.className = 'app';
+        const icon = document.createElement('div');
+        icon.className = 'icon';
+        if (/^https?:\/\//i.test(a.icon)) {
+          const img = document.createElement('img'); img.src = a.icon; img.alt = ''; icon.appendChild(img);
+        } else icon.textContent = a.icon;
+        const n = document.createElement('div'); n.className = 'name'; n.textContent = a.name;
+        const ds = document.createElement('div'); ds.className = 'desc'; ds.textContent = a.description;
+        d.append(icon, n, ds);
+        d.onclick = () => window.open(a.url, '_blank', 'noopener');
+        grid.appendChild(d);
+      });
+    }
+
+    document.getElementById('search').addEventListener('input', e => { query = e.target.value; render(); });
+    document.getElementById('tipOk').onclick = () => { document.getElementById('tip').style.display = 'none'; };
+    /* ---------- Admin ---------- */
+    let PW = '', ADMIN = [];
+    const $ = id => document.getElementById(id);
+    function adminCall(action, pw, apps) {
+      return fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: action, password: pw, apps: apps }) })
+        .then(r => r.json()).then(r => { if (!r.ok) throw new Error(r.error || 'Failed'); return r; });
+    }
+    $('adminBtn').onclick = () => {
+      const p = prompt('Admin password');
+      if (!p) return;
+      adminCall('list', p).then(r => { PW = p; ADMIN = r.apps; $('admin').style.display = 'block'; drawAdmin(); })
+        .catch(e => alert(e.message));
+    };
+    function drawAdmin() {
+      const box = $('adminList'); box.innerHTML = '';
+      ADMIN.forEach((a, i) => {
+        const d = document.createElement('div'); d.className = 'arow';
+        [['name', 'Name'], ['url', 'URL (https://...)'], ['category', 'Category'], ['icon', 'Icon (emoji or image URL)'], ['description', 'Description']].forEach(([k, label]) => {
+          const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = label; inp.value = a[k] || '';
+          inp.oninput = () => { a[k] = inp.value; }; d.appendChild(inp);
+        });
+        const row = document.createElement('div'); row.className = 'abtns';
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = a.active !== false;
+        cb.onchange = () => { a.active = cb.checked; };
+        const lab = document.createElement('label'); lab.append(cb, ' Show'); row.appendChild(lab);
+        [['▲', () => move(i, -1)], ['▼', () => move(i, 1)], ['🗑', () => { if (confirm('Delete ' + (a.name || 'this app') + '?')) { ADMIN.splice(i, 1); drawAdmin(); } }]]
+          .forEach(([t, f]) => { const b = document.createElement('button'); b.textContent = t; b.onclick = f; row.appendChild(b); });
+        d.appendChild(row); box.appendChild(d);
+      });
+    }
+    function move(i, dir) {
+      const j = i + dir; if (j < 0 || j >= ADMIN.length) return;
+      [ADMIN[i], ADMIN[j]] = [ADMIN[j], ADMIN[i]]; drawAdmin();
+    }
+    $('aAdd').onclick = () => {
+      ADMIN.push({ name: '', url: 'https://', category: (category && category !== 'All') ? category : 'Other', icon: '🔗', description: '', active: true });
+      drawAdmin(); window.scrollTo(0, document.body.scrollHeight);
+    };
+    $('aSave').onclick = () => {
+      adminCall('save', PW, ADMIN).then(() => { alert('Saved'); location.reload(); }).catch(e => alert(e.message));
+    };
+    $('aClose').onclick = () => { $('admin').style.display = 'none'; };
+  </script>
+</body>
+</html>
