@@ -44,6 +44,14 @@
     #tip p { margin: 0 0 16px; color: var(--muted); line-height: 1.45; }
     #tip button { width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--accent);
                   color: #fff; font-size: 1rem; cursor: pointer; }
+    .alink { background: none; border: 0; color: var(--muted); font-size: .85rem; padding: 14px; cursor: pointer; }
+    #admin { display: none; position: fixed; inset: 0; background: var(--bg); overflow: auto; z-index: 20; padding: 0 14px 60px; }
+    .abar { position: sticky; top: 0; background: var(--bg); padding: 12px 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .abar button, .abtns button { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; }
+    .abar .pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .arow { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin-bottom: 10px; max-width: 640px; margin-left: auto; margin-right: auto; }
+    .arow input[type=text] { width: 100%; padding: 9px; margin-bottom: 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: .95rem; }
+    .abtns { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
   </style>
 </head>
 <body>
@@ -59,6 +67,12 @@
     <div id="msg">Loading…</div>
   </div>
 
+  <div class="wrap" style="text-align:center"><button id="adminBtn" class="alink">⚙ Admin</button></div>
+  <div id="admin">
+    <div class="abar"><b>Manage apps</b><span><button id="aAdd">＋ Add</button> <button id="aSave" class="pri">Save</button> <button id="aClose">Close</button></span></div>
+    <div id="adminList"></div>
+  </div>
+
   <div id="tip">
     <div class="box">
       <h2>💡 TIP</h2>
@@ -71,7 +85,7 @@
     let APPS = [], category = '', query = '';
 
     // Paste your Apps Script Web app URL (ends in /exec) here:
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyR-rCGvofbEFB9mSlqmNFg5tRhZzG0ZhLKiRDOHIo-MR-WXUsjzPyWsKYL5Pa3nhdGZg/exec';
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxLdwGVHBm2zyDhyeK0fJcKmt1I6z7RxaEzVXABQV-_PuQLiWYa7VmXmVpZdV1-EbeKkw/exec';
 
     fetch(API_URL + '?format=json')
       .then(r => r.json())
@@ -139,6 +153,48 @@
 
     document.getElementById('search').addEventListener('input', e => { query = e.target.value; render(); });
     document.getElementById('tipOk').onclick = () => { document.getElementById('tip').style.display = 'none'; };
+    /* ---------- Admin ---------- */
+    let PW = '', ADMIN = [];
+    const $ = id => document.getElementById(id);
+    function adminCall(action, pw, apps) {
+      return fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: action, password: pw, apps: apps }) })
+        .then(r => r.json()).then(r => { if (!r.ok) throw new Error(r.error || 'Failed'); return r; });
+    }
+    $('adminBtn').onclick = () => {
+      const p = prompt('Admin password');
+      if (!p) return;
+      adminCall('list', p).then(r => { PW = p; ADMIN = r.apps; $('admin').style.display = 'block'; drawAdmin(); })
+        .catch(e => alert(e.message));
+    };
+    function drawAdmin() {
+      const box = $('adminList'); box.innerHTML = '';
+      ADMIN.forEach((a, i) => {
+        const d = document.createElement('div'); d.className = 'arow';
+        [['name', 'Name'], ['url', 'URL (https://...)'], ['category', 'Category'], ['icon', 'Icon (emoji or image URL)'], ['description', 'Description']].forEach(([k, label]) => {
+          const inp = document.createElement('input'); inp.type = 'text'; inp.placeholder = label; inp.value = a[k] || '';
+          inp.oninput = () => { a[k] = inp.value; }; d.appendChild(inp);
+        });
+        const row = document.createElement('div'); row.className = 'abtns';
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = a.active !== false;
+        cb.onchange = () => { a.active = cb.checked; };
+        const lab = document.createElement('label'); lab.append(cb, ' Show'); row.appendChild(lab);
+        [['▲', () => move(i, -1)], ['▼', () => move(i, 1)], ['🗑', () => { if (confirm('Delete ' + (a.name || 'this app') + '?')) { ADMIN.splice(i, 1); drawAdmin(); } }]]
+          .forEach(([t, f]) => { const b = document.createElement('button'); b.textContent = t; b.onclick = f; row.appendChild(b); });
+        d.appendChild(row); box.appendChild(d);
+      });
+    }
+    function move(i, dir) {
+      const j = i + dir; if (j < 0 || j >= ADMIN.length) return;
+      [ADMIN[i], ADMIN[j]] = [ADMIN[j], ADMIN[i]]; drawAdmin();
+    }
+    $('aAdd').onclick = () => {
+      ADMIN.push({ name: '', url: 'https://', category: (category && category !== 'All') ? category : 'Other', icon: '🔗', description: '', active: true });
+      drawAdmin(); window.scrollTo(0, document.body.scrollHeight);
+    };
+    $('aSave').onclick = () => {
+      adminCall('save', PW, ADMIN).then(() => { alert('Saved'); location.reload(); }).catch(e => alert(e.message));
+    };
+    $('aClose').onclick = () => { $('admin').style.display = 'none'; };
   </script>
 </body>
 </html>
